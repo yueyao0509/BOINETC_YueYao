@@ -1,0 +1,14 @@
+BOIN-ETC Shiny V5.12 workflow/results update
+
+Changes made from V5.11 Run Fixed:
+1. Added a Study Snapshot on the setup page so the operator can verify selected methods, scenarios, replications, and matched Max cohorts / early-stop / Max N settings before running.
+2. Kept the existing run-input validation and result-consistency audit.
+3. Changed Detailed Data from one large mixed table into a filtered view keyed by Method + Scenario + Design configuration.
+4. Run-level and dose-level tables now show one simulation configuration at a time, matching the chart/heatmap workflow and preventing different configurations from being visually mixed.
+5. User-facing method labels are standardized as BOIN-ETC1 / BOIN-ETC2 / BOIN-ETC3 in the filtered tables.
+6. Updated the completion message to explicitly state that results are separated by design configuration.
+
+Important:
+- The BOINETC statistical simulation core/package was not changed.
+- Existing matrix/chart consistency logic was preserved.
+- This environment did not contain R, so runtime execution could not be performed here. The included Windows launcher parses app.R before starting and will report syntax errors in its logs if any occur.

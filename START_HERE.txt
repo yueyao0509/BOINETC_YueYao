@@ -1,0 +1,10 @@
+BOIN-ETC Operator App V5.5 Reviewed
+
+Windows one-click start:
+1. Extract the ZIP completely.
+2. Open the BOINETC_Shiny folder.
+3. Double-click LAUNCH_BOINETC_APP.bat.
+4. On first launch, keep the launcher window open while R packages are checked/installed.
+
+Manual RStudio start is still available with:
+source("install_and_run.R")

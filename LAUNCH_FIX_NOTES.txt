@@ -1,0 +1,15 @@
+V5.11 startup repair
+
+Compared against the user-supplied V5.4 base package.
+No core launcher file was missing: app.R, run_desktop.R, RUN_APP.R, install_and_run.R,
+LAUNCH_BOINETC_APP.bat and the BOINETC package archive are all present.
+
+Main repair:
+- Explicitly quotes run_desktop.R when Start-Process passes it to Rscript.
+  This matters when the extracted app is located inside a Windows path containing spaces.
+- Detects if the R backend exits while the launcher is waiting, instead of appearing stuck for minutes.
+- Prints backend stderr/stdout directly in the launcher on failure.
+- run_desktop.R now parses app.R before starting Shiny, so an R syntax error is surfaced immediately.
+- Added DEBUG_LAUNCH.bat, which runs R in the foreground and shows the exact R error directly.
+- Kept the V5.10 result/matrix/chart validation changes.
+- Included the original BOINETC_0.1.0.tar.gz only as a reference/fallback file; V5.10 logic uses 0.1.1.

@@ -1,0 +1,28 @@
+V5.10 RESULT / MATRIX / CHART VALIDATION
+
+Scope of this revision is limited to the result chain:
+  simulation summaries -> dose-level matrices -> charts.
+
+Added:
+1. Result consistency audit on Results Overview.
+   For every method/scenario/design configuration, the app reconstructs:
+   - correct target-dose selection from pODC dose matrix,
+   - target patient allocation from m.PPTS dose matrix,
+   - mean sample size from m.NPTS dose matrix,
+   and compares those values with out.sum2.
+
+2. The audit reports PASS/FAIL per run configuration. This catches a wrong
+   matrix orientation, wrong configuration filter, wrong scenario mapping,
+   or wrong field-to-chart mapping after an actual simulation is run.
+
+3. Correct-selection charts no longer hard-clip at 100. CALC.SUM can retain
+   multiple tied ODCs in a trial, so summed target-dose ODC percentages are
+   not mathematically guaranteed to be <=100. The display keeps 100 as the
+   normal baseline but expands if the actual result exceeds 100.
+
+Retained:
+- Scenario 3-6 dose-level outputs are 4 x 4 (Dose A 1-4 x Dose B 1-4).
+- Summary overview is Scenario x Method, because correct selection, mean N,
+  and target allocation are one number per run configuration.
+- Dose-level ODC and patient-allocation charts each display one selected
+  method/scenario/configuration at a time.

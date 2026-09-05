@@ -1,0 +1,79 @@
+#################################################################
+# Simulation results of BOIN-ETC 
+#################################################################
+
+
+#####################################
+# Settings 
+#####################################
+simulation times               = 100
+number of max cohort           = 24
+cohortsize                     = 3
+(target tox, target eff)       = (0.3,0.6)
+#pats to move to next subtrial = 9
+(lambda1, lambda2, eta1)       = (0.14, 0.35, 0.48)
+
+scenario = 2
+true probability (tox) 
+     [,1] [,2] [,3]
+[1,] 0.05 0.15 0.30
+[2,] 0.15 0.35 0.55
+true probability (eff) 
+     [,1] [,2] [,3]
+[1,] 0.25 0.60 0.65
+[2,] 0.60 0.65 0.70
+
+parameter for utility calculation 
+[1] 100  25  75   0
+
+
+#####################################
+# Results 
+#####################################
+# mean number of patients by dose level 
+     [,1] [,2] [,3]
+[1,] 4.23 7.80 3.72
+[2,] 7.50 2.82 0.48
+
+# percentage of number of patients treated by dose level 
+     [,1] [,2] [,3]
+[1,] 16.4 30.3 13.4
+[2,] 29.0  9.4  1.4
+
+# mean number of tox by dose level 
+     [,1] [,2] [,3]
+[1,] 0.20 1.27 1.25
+[2,] 1.02 0.91 0.30
+
+# mean number of eff by dose level 
+     [,1] [,2] [,3]
+[1,] 1.11 4.44 2.36
+[2,] 4.58 1.82 0.37
+
+# observed P(tox) by dose level 
+     [,1] [,2] [,3]
+[1,]  4.7 16.3 33.6
+[2,] 13.6 32.3 62.5
+
+# observed P(eff) by dose level 
+     [,1] [,2] [,3]
+[1,] 26.2 56.9 63.4
+[2,] 61.1 64.5 77.1
+
+# percentage to select as ODC by dose level 
+     [,1] [,2] [,3]
+[1,]    6   37   11
+[2,]   42   14    0
+
+# percentage to not select ODC 
+[1] 0
+
+# percentage to select target dose correctly 
+[1] 79
+
+# percentage of number of patients assigned to target doses 
+[1] 59.3
+
+# mean number of patients 
+   Min. 1st Qu.  Median    Mean 3rd Qu.    Max. 
+  18.00   24.00   25.50   26.55   30.00   39.00 

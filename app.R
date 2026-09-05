@@ -9,16 +9,19 @@ if (length(missing_required) > 0) {
 
 library(shiny)
 
+required_boinetc_version <- numeric_version("0.1.1")
+
 load_boinetc <- function() {
-  if (requireNamespace("BOINETC", quietly = TRUE)) {
+  if (requireNamespace("BOINETC", quietly = TRUE) &&
+      utils::packageVersion("BOINETC") >= required_boinetc_version) {
     return(TRUE)
   }
 
   # Standalone-app convenience: try installing from a tarball placed next to app.R.
   app_dir <- normalizePath(getwd(), winslash = "/", mustWork = FALSE)
   local_tarballs <- c(
-    file.path(app_dir, "BOINETC_0.1.0.tar.gz"),
-    file.path(dirname(app_dir), "BOINETC_0.1.0.tar.gz")
+    file.path(app_dir, "BOINETC_0.1.1.tar.gz"),
+    file.path(dirname(app_dir), "BOINETC_0.1.1.tar.gz")
   )
   local_tarballs <- local_tarballs[file.exists(local_tarballs)]
 
@@ -49,7 +52,10 @@ parse_num_vector <- function(x, name, integer = FALSE, expected_length = NULL) {
     stop(name, " must contain exactly ", expected_length, " value(s).", call. = FALSE)
   }
   if (integer) {
-    nums <- as.integer(nums)
+    if (any(abs(nums - round(nums)) > 1e-10)) {
+      stop(name, " must contain whole numbers only.", call. = FALSE)
+    }
+    nums <- as.integer(round(nums))
   }
   nums
 }
@@ -66,8 +72,8 @@ plot_probability_matrix <- function(mat, main = "Probability matrix", target = N
     x = seq_len(nc), y = seq_len(nr), z = z,
     axes = FALSE, xlab = "Dose level B", ylab = "Dose level A", main = main
   )
-  graphics::axis(1, at = seq_len(nc), labels = paste0("B", seq_len(nc)))
-  graphics::axis(2, at = seq_len(nr), labels = paste0("A", rev(seq_len(nr))), las = 1)
+  graphics::axis(1, at = seq_len(nc), labels = seq_len(nc))
+  graphics::axis(2, at = seq_len(nr), labels = rev(seq_len(nr)), las = 1)
   graphics::box()
 
   for (i in seq_len(nr)) {
@@ -97,114 +103,186 @@ as_display_df <- function(x) {
   out
 }
 
-ui <- fluidPage(
-  tags$head(
-    tags$style(HTML("
-      .app-title { margin-bottom: 6px; }
-      .muted { color: #667085; }
-      .status-ok { color: #027a48; font-weight: 700; }
-      .status-bad { color: #b42318; font-weight: 700; }
-      .well { background-color: #fbfbfb; }
-      .small-note { font-size: 0.92em; color: #667085; }
-      pre { white-space: pre-wrap; }
+
+method_display <- function(x) {
+  recode <- c(BOINETC_m1 = "BOIN-ETC1", BOINETC_m2 = "BOIN-ETC2", BOINETC_m3 = "BOIN-ETC3")
+  out <- unname(recode[as.character(x)])
+  out[is.na(out)] <- as.character(x)[is.na(out)]
+  out
+}
+
+ui <- navbarPage(
+  title = "BOIN-ETC Research App",
+  id = "main_nav",
+  header = tagList(
+    tags$head(tags$style(HTML("\n      body { background:#f4f7fb; color:#172033; }\n      .navbar { margin-bottom: 0; border-radius:0; box-shadow:0 1px 8px rgba(16,24,40,.10); }\n      .container-fluid { max-width: 1500px; }\n      .page-shell { padding-top:22px; padding-bottom:32px; }\n      .hero { background:linear-gradient(135deg,#0f3d63,#245f8f); color:white; border-radius:14px; padding:24px 26px; margin-bottom:18px; box-shadow:0 8px 28px rgba(15,61,99,.18); }\n      .hero h2 { margin:0 0 8px 0; font-weight:700; }\n      .hero p { margin:0; opacity:.9; font-size:1.05em; }\n      .step-chip { display:inline-block; border-radius:999px; padding:5px 10px; margin-right:6px; margin-top:10px; background:rgba(255,255,255,.15); font-size:.9em; }\n      .app-card { background:white; border:1px solid #e4e7ec; border-radius:12px; padding:20px; margin-bottom:16px; box-shadow:0 2px 10px rgba(16,24,40,.04); }\n      .app-title { font-weight:700; margin-top:0; }\n      .muted { color:#667085; }\n      .status-ok { color:#027a48; font-weight:700; }\n      .status-bad { color:#b42318; font-weight:700; }\n      .small-note { font-size:.92em; color:#667085; }\n      .metric-card { background:white; border:1px solid #e4e7ec; border-radius:12px; padding:18px; min-height:112px; box-shadow:0 2px 10px rgba(16,24,40,.04); }\n      .section-kicker { text-transform:uppercase; letter-spacing:.08em; font-size:.78em; font-weight:700; color:#667085; }\n      .run-panel { border-left:4px solid #2f6f9f; }\n      .btn { border-radius:10px; font-weight:700; transition:transform .16s ease, box-shadow .16s ease, background .16s ease, border-color .16s ease; }\n      .btn:hover:not([disabled]) { transform:translateY(-1px); box-shadow:0 7px 18px rgba(16,24,40,.14); }\n      .btn:active:not([disabled]) { transform:translateY(0) scale(.99); box-shadow:0 3px 8px rgba(16,24,40,.10); }\n      .btn-primary { background:#245f8f; border-color:#245f8f; }\n      .btn-primary:hover { background:#194e77; border-color:#194e77; }\n      .btn-soft { background:#eef4f9; border:1px solid #c7d7e6; color:#245f8f; }\n      .btn-soft:hover { background:#e3eef7; color:#194e77; }\n      .btn-danger-soft { background:#fff5f4; border:1px solid #f5c9c5; color:#b42318; }\n      .btn-danger-soft:hover { background:#feeceb; color:#912018; }\n      #run { position:relative; overflow:hidden; min-height:52px; letter-spacing:.01em; }\n      #run.run-ready { box-shadow:0 8px 22px rgba(36,95,143,.20); }\n      #run.run-loading { color:transparent !important; pointer-events:none; }\n      #run.run-loading:after { content:'Running simulation...'; color:white; position:absolute; inset:0; display:flex; align-items:center; justify-content:center; }\n      #run.run-loading:before { content:''; position:absolute; width:16px; height:16px; border:2px solid rgba(255,255,255,.45); border-top-color:white; border-radius:50%; left:calc(50% - 92px); top:17px; animation:spin .75s linear infinite; z-index:2; }\n      @keyframes spin { to { transform:rotate(360deg); } }\n      .quick-actions { display:flex; gap:10px; flex-wrap:wrap; margin-top:14px; }\n      .quick-actions .btn { min-width:150px; }\n      .navbar-nav > li > a { transition:background .18s ease, color .18s ease, box-shadow .18s ease; font-weight:600; }\n      .navbar-nav > .active > a, .navbar-nav > .active > a:hover { box-shadow:inset 0 -3px 0 #5ba3d0; }\n      .app-card { transition:transform .18s ease, box-shadow .18s ease, border-color .18s ease; }\n      .app-card:hover { border-color:#d5dde7; box-shadow:0 5px 18px rgba(16,24,40,.075); }\n      .tab-content > .tab-pane.active { animation:pageIn .24s ease-out; }\n      @keyframes pageIn { from { opacity:.25; transform:translateY(6px); } to { opacity:1; transform:translateY(0); } }\n      .status-pill { display:inline-flex; align-items:center; gap:7px; border-radius:999px; padding:6px 10px; margin-bottom:10px; font-size:.88em; font-weight:700; background:#f2f4f7; color:#475467; }\n      .status-pill.ready { background:#ecfdf3; color:#027a48; }\n      .status-pill.running { background:#eff8ff; color:#175cd3; }\n      .status-pill.error { background:#fef3f2; color:#b42318; }\n      .empty-state { text-align:center; padding:24px; color:#667085; }\n      .validation-ok { color:#027a48; font-weight:600; }\n      .validation-bad { color:#b42318; font-weight:600; }\n      .metric-value { font-size:28px; font-weight:700; }\n      pre { white-space:pre-wrap; }\n    "))),
+    tags$script(HTML("
+      Shiny.addCustomMessageHandler('runButtonState', function(x) {
+        var btn = document.getElementById('run');
+        if (!btn) return;
+        btn.disabled = !x.enabled;
+        btn.classList.toggle('run-ready', !!x.enabled && !x.running);
+        btn.classList.toggle('run-loading', !!x.running);
+      });
+      Shiny.addCustomMessageHandler('focusTop', function(x) {
+        window.scrollTo({top:0, behavior:'smooth'});
+      });
+      $(document).on('click', '#run', function(){
+        if (!this.disabled) { this.classList.add('run-loading'); this.classList.remove('run-ready'); }
+      });
     "))
   ),
-  titlePanel(div(class = "app-title", "BOIN-ETC Simulation Shiny App")),
-  div(class = "muted", "Interactive front end for the BOINETC R package."),
-  br(),
-  sidebarLayout(
-    sidebarPanel(
-      width = 3,
-      uiOutput("package_status"),
-      tags$hr(),
-      selectInput(
-        "methods", "BOIN-ETC method(s)",
-        choices = c("BOIN-ETC1" = "BOINETC_m1", "BOIN-ETC2" = "BOINETC_m2", "BOIN-ETC3" = "BOINETC_m3"),
-        selected = c("BOINETC_m1", "BOINETC_m2", "BOINETC_m3"),
-        multiple = TRUE
+
+  tabPanel("1. Study Setup", value="setup",
+    fluidPage(class="page-shell",
+      div(class="hero",
+        h2("BOIN-ETC Operator Workspace"),
+        p("Configure a study, inspect scenarios, run simulations, review operating characteristics, and export results from one local application."),
+        span(class="step-chip", "1 · Configure"), span(class="step-chip", "2 · Preview"), span(class="step-chip", "3 · Run"), span(class="step-chip", "4 · Review & Export")
       ),
-      selectInput(
-        "scenario_ids", "Scenario(s) to simulate",
-        choices = stats::setNames(as.character(1:10), paste("Scenario", 1:10)),
-        selected = as.character(3:6),
-        multiple = TRUE
-      ),
-      selectInput(
-        "scenario_preview", "Scenario preview",
-        choices = stats::setNames(as.character(1:10), paste("Scenario", 1:10)),
-        selected = "3"
-      ),
-      tags$hr(),
-      numericInput("ntrial", "Number of simulated trials", value = 100, min = 1, step = 100),
-      textInput("ncohort", "Max cohorts, comma-separated", value = "16, 24"),
-      numericInput("cohortsize", "Cohort size", value = 3, min = 1, step = 1),
-      textInput("n_earlystop", "Early-stop patients, comma-separated", value = "6, 9"),
-      tags$hr(),
-      numericInput("phi", "Target toxicity, phi", value = 0.30, min = 0, max = 1, step = 0.01),
-      textInput("delta", "Target efficacy delta", value = "0.60"),
-      textInput("lambda1", "lambda1", value = "0.14"),
-      textInput("lambda2", "lambda2", value = "0.35"),
-      textInput("eta1", "eta1", value = "0.48"),
-      textInput("u", "Utility vector u", value = "100, 25, 75, 0"),
-      numericInput("alpha", "Utility prior alpha", value = 1, min = 0, step = 0.1),
-      numericInput("beta", "Utility prior beta", value = 1, min = 0, step = 0.1),
-      numericInput("seed", "Random seed", value = 1234, min = 1, step = 1),
-      tags$hr(),
-      actionButton("run", "Run simulation", class = "btn-primary"),
-      br(), br(),
-      div(class = "small-note", "Tip: start with 50–100 trials for a fast smoke test; increase to 1,000+ for final operating characteristics.")
-    ),
-    mainPanel(
-      width = 9,
-      tabsetPanel(
-        tabPanel(
-          "Scenario",
-          br(),
+      fluidRow(
+        column(8, div(class="app-card",
+          h3(class="app-title", "Enter study parameters"),
+          p(class="muted", "All simulation settings below are editable by the operator."),
           fluidRow(
-            column(5, h4("Toxicity probability matrix"), tableOutput("tox_matrix")),
-            column(5, h4("Efficacy probability matrix"), tableOutput("eff_matrix")),
-            column(2, h4("Target dose(s)"), verbatimTextOutput("target_dose"))
+            column(4, selectInput("methods", "BOIN-ETC method(s)", choices=c("BOIN-ETC1"="BOINETC_m1", "BOIN-ETC2"="BOINETC_m2", "BOIN-ETC3"="BOINETC_m3"), selected=c("BOINETC_m1","BOINETC_m2","BOINETC_m3"), multiple=TRUE)),
+            column(4, selectInput("scenario_ids", "Scenario(s) to simulate", choices=stats::setNames(as.character(1:10), paste("Scenario",1:10)), selected=as.character(3:6), multiple=TRUE)),
+            column(4, numericInput("ntrial", "Number of simulated trials", value=100, min=1, step=100))
           ),
           fluidRow(
-            column(6, plotOutput("tox_plot", height = "360px")),
-            column(6, plotOutput("eff_plot", height = "360px"))
+            column(4, textInput("ncohort", "Max cohorts", value="16, 24")),
+            column(4, numericInput("cohortsize", "Cohort size", value=3, min=1, step=1)),
+            column(4, textInput("n_earlystop", "Early-stop patients", value="6, 9"))
+          ),
+          fluidRow(
+            column(4, numericInput("phi", "Target toxicity (phi)", value=.30, min=0, max=1, step=.01)),
+            column(4, textInput("delta", "Target efficacy (delta)", value="0.60")),
+            column(4, numericInput("seed", "Random seed", value=1234, min=1, step=1))
           )
-        ),
-        tabPanel(
-          "Run summary",
-          br(),
-          uiOutput("run_message"),
-          fluidRow(
-            column(4, verbatimTextOutput("run_metadata")),
-            column(8, h4("Summary: one row per method/scenario/run setting"), DT::DTOutput("sum2_table"))
-          ),
-          br(),
-          h4("Dose-level summary"),
-          DT::DTOutput("sum1_table")
-        ),
-        tabPanel(
-          "Generated files",
-          br(),
-          uiOutput("file_message"),
-          DT::DTOutput("files_table"),
-          br(),
-          downloadButton("download_sum1", "Download dose-level summary CSV"),
-          downloadButton("download_sum2", "Download run summary CSV"),
-          downloadButton("download_all", "Download generated files ZIP")
-        ),
-        tabPanel(
-          "How to use",
-          br(),
-          h4("Local setup"),
-          tags$ol(
-            tags$li("Install the BOINETC package tarball."),
-            tags$li("Install Shiny app dependencies: shiny, DT, openxlsx, and either Iso or UniIsoRegression."),
-            tags$li("Run this folder with shiny::runApp().")
-          ),
-          tags$pre("install.packages(c('shiny', 'DT', 'openxlsx', 'Iso'))\ninstall.packages('BOINETC_0.1.0.tar.gz', repos = NULL, type = 'source')\nshiny::runApp('BOINETC_Shiny')"),
-          h4("Workflow used by the app"),
-          tags$p("The app calls BOINETC::run_boinetc_workflow(), which runs the selected BOIN-ETC simulations, calls CALC.SUM(), and returns two summary tables plus the generated output files."),
-          tags$p("Excel workbook generation is enabled automatically when openxlsx is installed. The summary calculation requires a package that provides biviso(), such as Iso or UniIsoRegression.")
+        )),
+        column(4, div(class="app-card",
+          h3(class="app-title", "Advanced parameters"),
+          textInput("lambda1", "lambda1", value="0.14"),
+          textInput("lambda2", "lambda2", value="0.35"),
+          textInput("eta1", "eta1", value="0.48"),
+          textInput("u", "Utility vector u", value="100, 25, 75, 0"),
+          fluidRow(column(6,numericInput("alpha","Utility prior alpha",1,min=0,step=.1)), column(6,numericInput("beta","Utility prior beta",1,min=0,step=.1))),
+          hr(), uiOutput("package_status")
+        ))
+      ),
+      div(class="app-card",
+        div(class="section-kicker", "Study snapshot"),
+        h4("What will be simulated"),
+        uiOutput("study_snapshot")
+      ),
+      div(class="app-card run-panel",
+        div(class="section-kicker", "Ready check"),
+        h4("Run the study"),
+        uiOutput("input_validation"),
+        uiOutput("run_status_pill"),
+        p(class="small-note", "For a quick test use 50–100 trials. For final operating characteristics, increase the number of trials."),
+        actionButton("run", "Run simulation", class="btn-primary btn-lg run-ready", width="100%"),
+        div(class="quick-actions",
+          actionButton("go_preview", "Preview scenario", class="btn-soft"),
+          actionButton("reset_inputs", "Reset inputs", class="btn-danger-soft")
+        )
+      )
+    )
+  ),
+
+  tabPanel("2. Scenario Preview", value="preview",
+    fluidPage(class="page-shell",
+      div(class="app-card",
+        fluidRow(
+          column(4, selectInput("scenario_preview", "Scenario to inspect", choices=stats::setNames(as.character(1:10), paste("Scenario",1:10)), selected="3")),
+          column(8, h3("True toxicity / efficacy inputs"), p(class="muted","Inspect the probability matrices used by the selected built-in scenario before running."))
+        )
+      ),
+      fluidRow(
+        column(6, div(class="app-card", h4("Toxicity probability matrix"), tableOutput("tox_matrix"), plotOutput("tox_plot", height="360px"))),
+        column(6, div(class="app-card", h4("Efficacy probability matrix"), tableOutput("eff_matrix"), plotOutput("eff_plot", height="360px")))
+      ),
+      div(class="app-card", h4("Target dose(s)"), verbatimTextOutput("target_dose"))
+    )
+  ),
+
+  tabPanel("3. Results Overview", value="results",
+    fluidPage(class="page-shell",
+      div(class="app-card", uiOutput("run_message")),
+      uiOutput("result_cards"),
+      div(class="app-card",
+        h3("Result consistency audit"),
+        p(class="muted", "Checks whether the run-level simulation summaries can be reconstructed from the dose-level matrices for every method, scenario, and design configuration."),
+        uiOutput("integrity_summary"),
+        DT::DTOutput("integrity_table")
+      ),
+      div(class="app-card",
+        h3("Matrix overview by method and scenario"),
+        p(class="muted", "Choose one design configuration. The three heatmaps summarize final results across scenarios (rows) and methods (columns)."),
+        uiOutput("overview_matrix_filter"),
+        fluidRow(
+          column(4, plotOutput("correct_selection_matrix_plot", height="320px")),
+          column(4, plotOutput("sample_size_matrix_plot", height="320px")),
+          column(4, plotOutput("target_alloc_matrix_plot", height="320px"))
+        )
+      ),
+      fluidRow(
+        column(6, div(class="app-card", h4("Correct target-dose selection"), plotOutput("correct_selection_plot", height="360px"))),
+        column(6, div(class="app-card", h4("Mean sample size"), plotOutput("sample_size_plot", height="360px")))
+      ),
+      div(class="app-card",
+        h4("Run metadata"), verbatimTextOutput("run_metadata"),
+        div(class="quick-actions",
+          actionButton("go_charts", "View charts", class="btn-soft"),
+          actionButton("go_data", "Open detailed data", class="btn-soft"),
+          actionButton("go_export", "Export results", class="btn-primary")
+        )
+      )
+    )
+  ),
+
+  tabPanel("4. Charts", value="charts",
+    fluidPage(class="page-shell",
+      div(class="app-card",
+        h3("Operating-characteristic plots"),
+        p(class="muted","All plots on this page are generated from the real BOINETC simulation output. The Results Overview page also verifies that run-level summaries reproduce from the corresponding dose-level matrices."),
+        selectInput("chart_metric", "Metric", choices=c("Correct selection"="correct.pODC", "Mean sample size"="mean.npat", "Target patient allocation"="target.PPTS"), selected="correct.pODC"),
+        uiOutput("chart_config_filter")
+      ),
+      div(class="app-card", plotOutput("metric_plot", height="440px")),
+      div(class="app-card",
+        h3("Dose-level heatmaps"),
+        p(class="muted", "Choose one method, scenario, and design configuration. Each heatmap shows one run configuration only; configurations are never stacked. Axis values are BOINETC dose-level indices."),
+        uiOutput("dose_chart_filters")
+      ),
+      fluidRow(
+        column(6, div(class="app-card", h4("Dose-level ODC selection"), plotOutput("dose_odc_plot", height="420px"))),
+        column(6, div(class="app-card", h4("Dose-level patient allocation"), plotOutput("dose_alloc_plot", height="420px")))
+      )
+    )
+  ),
+
+  tabPanel("5. Detailed Data", value="data",
+    fluidPage(class="page-shell",
+      div(class="app-card",
+        h3("Detailed result filters"),
+        p(class="muted", "Use the same method, scenario, and design-configuration keys as the charts so one simulation setting is reviewed at a time."),
+        uiOutput("data_filters")
+      ),
+      div(class="app-card", h3("Run-level summary"), DT::DTOutput("sum2_table")),
+      div(class="app-card", h3("Dose-level summary"), DT::DTOutput("sum1_table"))
+    )
+  ),
+
+  tabPanel("6. Export", value="export",
+    fluidPage(class="page-shell",
+      div(class="app-card", h3("Generated files"), uiOutput("file_message"), DT::DTOutput("files_table")),
+      div(class="app-card",
+        h4("Download results"),
+        div(class="quick-actions",
+          downloadButton("download_sum1", "Dose-level summary CSV", class="btn-soft"),
+          downloadButton("download_sum2", "Run summary CSV", class="btn-soft"),
+          downloadButton("download_all", "Download all files ZIP", class="btn-primary")
         )
       )
     )
@@ -212,7 +290,7 @@ ui <- fluidPage(
 )
 
 server <- function(input, output, session) {
-  rv <- reactiveValues(result = NULL, error = NULL, started = FALSE)
+  rv <- reactiveValues(result = NULL, error = NULL, started = FALSE, running = FALSE)
 
   output$package_status <- renderUI({
     if (isTRUE(boinetc_available)) {
@@ -223,7 +301,7 @@ server <- function(input, output, session) {
     } else {
       tagList(
         div(class = "status-bad", "BOINETC package: not available"),
-        div(class = "small-note", "Install BOINETC_0.1.0.tar.gz, then restart the app.")
+        div(class = "small-note", "Install BOINETC_0.1.1.tar.gz, then restart the app.")
       )
     }
   })
@@ -256,12 +334,146 @@ server <- function(input, output, session) {
     plot_probability_matrix(sc$pe.true.mat, main = paste("Scenario", sc$id, "efficacy"), target = sc$tdose)
   })
 
+  validate_inputs <- reactive({
+    problems <- character(0)
+    if (length(input$methods) == 0) problems <- c(problems, "Select at least one method")
+    if (length(input$scenario_ids) == 0) problems <- c(problems, "Select at least one scenario")
+    if (is.null(input$ntrial) || is.na(input$ntrial) || input$ntrial < 1) problems <- c(problems, "Number of trials must be at least 1")
+    if (is.null(input$cohortsize) || is.na(input$cohortsize) || input$cohortsize < 1) problems <- c(problems, "Cohort size must be at least 1")
+    if (is.null(input$phi) || is.na(input$phi) || input$phi <= 0 || input$phi >= 1) problems <- c(problems, "phi must be between 0 and 1")
+    if (!is.null(input$ntrial) && !is.na(input$ntrial) && abs(input$ntrial - round(input$ntrial)) > 1e-10) problems <- c(problems, "Number of trials must be a whole number")
+    if (!is.null(input$cohortsize) && !is.na(input$cohortsize) && abs(input$cohortsize - round(input$cohortsize)) > 1e-10) problems <- c(problems, "Cohort size must be a whole number")
+    if (is.null(input$seed) || is.na(input$seed) || input$seed < 1 || abs(input$seed - round(input$seed)) > 1e-10) problems <- c(problems, "Random seed must be a positive whole number")
+    if (is.null(input$alpha) || is.na(input$alpha) || input$alpha <= 0) problems <- c(problems, "Utility prior alpha must be greater than 0")
+    if (is.null(input$beta) || is.na(input$beta) || input$beta <= 0) problems <- c(problems, "Utility prior beta must be greater than 0")
+
+    parsed <- tryCatch({
+      nc <- parse_num_vector(input$ncohort, "Max cohorts", integer = TRUE)
+      ne <- parse_num_vector(input$n_earlystop, "Early-stop patients", integer = TRUE)
+      delta_v <- parse_num_vector(input$delta, "delta")
+      l1 <- parse_num_vector(input$lambda1, "lambda1")
+      l2 <- parse_num_vector(input$lambda2, "lambda2")
+      eta <- parse_num_vector(input$eta1, "eta1")
+      util <- parse_num_vector(input$u, "Utility vector u", expected_length = 4)
+      list(ok = TRUE, nc = nc, ne = ne, delta = delta_v, l1 = l1, l2 = l2, eta = eta, util = util)
+    }, error = function(e) list(ok = FALSE, message = conditionMessage(e)))
+
+    if (!isTRUE(parsed$ok)) {
+      problems <- c(problems, parsed$message)
+    } else {
+      if (length(parsed$nc) != length(parsed$ne)) problems <- c(problems, "Max cohorts and early-stop patients must have the same number of values")
+      if (any(parsed$nc < 1)) problems <- c(problems, "Max cohorts values must be positive")
+      if (any(parsed$ne < 1)) problems <- c(problems, "Early-stop patient values must be positive")
+      probs <- c(parsed$delta, parsed$l1, parsed$l2, parsed$eta)
+      if (any(probs < 0 | probs > 1)) problems <- c(problems, "delta, lambda1, lambda2, and eta1 values must be between 0 and 1")
+      nd <- length(parsed$delta)
+      bad_parameter_lengths <- c(
+        if (!(length(parsed$l1) %in% c(1L, nd))) "lambda1" else NULL,
+        if (!(length(parsed$l2) %in% c(1L, nd))) "lambda2" else NULL,
+        if (!(length(parsed$eta) %in% c(1L, nd))) "eta1" else NULL
+      )
+      if (length(bad_parameter_lengths) > 0) {
+        problems <- c(problems, paste0(paste(bad_parameter_lengths, collapse=", "),
+          " must contain either 1 value or the same number of values as delta (", nd, ")"))
+      }
+    }
+    unique(problems)
+  })
+
+  output$input_validation <- renderUI({
+    problems <- validate_inputs()
+    if (length(problems) == 0) {
+      div(class="validation-ok", "✓ Inputs look valid. The study is ready to run.")
+    } else {
+      tagList(
+        div(class="validation-bad", "Fix these inputs before running:"),
+        tags$ul(lapply(problems, tags$li))
+      )
+    }
+  })
+
+  output$study_snapshot <- renderUI({
+    problems <- validate_inputs()
+    nc <- tryCatch(parse_num_vector(input$ncohort, "Max cohorts", integer = TRUE), error=function(e) numeric(0))
+    ne <- tryCatch(parse_num_vector(input$n_earlystop, "Early-stop patients", integer = TRUE), error=function(e) numeric(0))
+    methods <- if (length(input$methods)) paste(method_display(input$methods), collapse=", ") else "None selected"
+    scenarios <- if (length(input$scenario_ids)) paste(paste0("S", input$scenario_ids), collapse=", ") else "None selected"
+    pairs <- if (length(nc) && length(ne) && length(nc)==length(ne)) {
+      paste(paste0(nc, " cohorts / early stop ", ne, " patients / max N ", nc * as.integer(input$cohortsize)), collapse="; ")
+    } else {
+      "Complete Max cohorts and Early-stop patients to see matched design settings."
+    }
+    tagList(
+      fluidRow(
+        column(4, strong("Methods"), br(), span(methods)),
+        column(4, strong("Scenarios"), br(), span(scenarios)),
+        column(4, strong("Replications"), br(), span(format(input$ntrial, big.mark=",")))
+      ),
+      br(),
+      strong("Matched design settings"), br(), span(class="small-note", pairs),
+      if (length(problems)==0) div(class="validation-ok", style="margin-top:10px;", "✓ Snapshot is internally consistent.") else
+        div(class="validation-bad", style="margin-top:10px;", "Snapshot contains input issues; see Ready check below.")
+    )
+  })
+
+  output$run_status_pill <- renderUI({
+    problems <- validate_inputs()
+    if (isTRUE(rv$running)) {
+      div(class="status-pill running", "Simulation running")
+    } else if (!is.null(rv$error)) {
+      div(class="status-pill error", "Last run needs attention")
+    } else if (length(problems) == 0) {
+      div(class="status-pill ready", "Ready to run")
+    } else {
+      div(class="status-pill", "Waiting for valid inputs")
+    }
+  })
+
+  observe({
+    problems <- validate_inputs()
+    session$sendCustomMessage("runButtonState", list(enabled = length(problems) == 0 && isTRUE(boinetc_available) && !isTRUE(rv$running), running = isTRUE(rv$running)))
+  })
+
+  observeEvent(input$go_preview, {
+    if (length(input$scenario_ids) > 0) updateSelectInput(session, "scenario_preview", selected = input$scenario_ids[[1]])
+    updateNavbarPage(session, "main_nav", selected = "preview")
+    session$sendCustomMessage("focusTop", list())
+  })
+
+  observeEvent(input$reset_inputs, {
+    updateSelectInput(session, "methods", selected=c("BOINETC_m1","BOINETC_m2","BOINETC_m3"))
+    updateSelectInput(session, "scenario_ids", selected=as.character(3:6))
+    updateNumericInput(session, "ntrial", value=100)
+    updateTextInput(session, "ncohort", value="16, 24")
+    updateNumericInput(session, "cohortsize", value=3)
+    updateTextInput(session, "n_earlystop", value="6, 9")
+    updateNumericInput(session, "phi", value=.30)
+    updateTextInput(session, "delta", value="0.60")
+    updateNumericInput(session, "seed", value=1234)
+    updateTextInput(session, "lambda1", value="0.14")
+    updateTextInput(session, "lambda2", value="0.35")
+    updateTextInput(session, "eta1", value="0.48")
+    updateTextInput(session, "u", value="100, 25, 75, 0")
+    updateNumericInput(session, "alpha", value=1)
+    updateNumericInput(session, "beta", value=1)
+    rv$error <- NULL
+    showNotification("Inputs reset to the default study settings.", type="message", duration=2)
+  })
+
+  observeEvent(input$go_charts, { updateNavbarPage(session, "main_nav", selected="charts"); session$sendCustomMessage("focusTop", list()) })
+  observeEvent(input$go_data, { updateNavbarPage(session, "main_nav", selected="data"); session$sendCustomMessage("focusTop", list()) })
+  observeEvent(input$go_export, { updateNavbarPage(session, "main_nav", selected="export"); session$sendCustomMessage("focusTop", list()) })
+
   observeEvent(input$run, {
     rv$started <- TRUE
     rv$error <- NULL
     rv$result <- NULL
+    rv$running <- TRUE
+    session$sendCustomMessage("runButtonState", list(enabled = FALSE, running = TRUE))
 
     tryCatch({
+      problems <- validate_inputs()
+      if (length(problems) > 0) stop(paste(problems, collapse = "; "), call. = FALSE)
       if (!isTRUE(boinetc_available)) {
         stop("BOINETC is not installed. Install the package tarball and restart the app.", call. = FALSE)
       }
@@ -320,8 +532,16 @@ server <- function(input, output, session) {
         incProgress(0.8, detail = "Preparing outputs")
         rv$result <- res
       })
+      rv$running <- FALSE
+      session$sendCustomMessage("runButtonState", list(enabled = TRUE, running = FALSE))
+      updateNavbarPage(session, "main_nav", selected = "results")
+      session$sendCustomMessage("focusTop", list())
+      showNotification("Simulation completed successfully.", type="message", duration=3)
     }, error = function(e) {
+      rv$running <- FALSE
       rv$error <- conditionMessage(e)
+      session$sendCustomMessage("runButtonState", list(enabled = length(validate_inputs()) == 0 && isTRUE(boinetc_available), running = FALSE))
+      showNotification(paste("Simulation failed:", rv$error), type="error", duration=6)
     })
   })
 
@@ -329,11 +549,11 @@ server <- function(input, output, session) {
     if (!is.null(rv$error)) {
       div(class = "alert alert-danger", strong("Run failed: "), rv$error)
     } else if (!is.null(rv$result)) {
-      div(class = "alert alert-success", "Simulation completed. Review the tables below or download the generated files.")
+      div(class = "alert alert-success", strong("Simulation completed. "), "Results are separated by design configuration; use the overview selector, charts, or Detailed Data filters to inspect one setting at a time.")
     } else if (isTRUE(rv$started)) {
       div(class = "alert alert-info", "No result is available yet.")
     } else {
-      div(class = "alert alert-info", "Set the inputs in the sidebar and click Run simulation.")
+      div(class = "alert alert-info", "Configure the study on the Study Setup page, then click Run simulation.")
     }
   })
 
@@ -341,21 +561,512 @@ server <- function(input, output, session) {
     req(rv$result)
     res <- rv$result
     paste(
-      "Output directory:", res$outdir,
-      "\nWorkbook:", ifelse(is.na(res$workbook_file), "Not written; install openxlsx to enable Excel output.", res$workbook_file),
-      "\nNumber of simulation result files:", length(res$simulation),
+      "Output directory: ", res$outdir,
+      "\nWorkbook: ", ifelse(is.na(res$workbook_file), "Not written; install openxlsx to enable Excel output.", res$workbook_file),
+      "\nNumber of simulation runs: ", length(res$simulation),
+      "\nDistinct design/parameter configurations: ", nrow(unique(as.data.frame(res$out.sum2)[c("totaln","cohortsize","n.earlystop","parameter_set")])),
       sep = ""
+    )
+  })
+
+  output$data_filters <- renderUI({
+    req(rv$result)
+    x <- as.data.frame(rv$result$out.sum2)
+    methods <- unique(as.character(x$method))
+    selected_method <- if (!is.null(input$data_method) && input$data_method %in% methods) input$data_method else methods[1]
+    xm <- x[as.character(x$method) == selected_method, , drop=FALSE]
+
+    scenarios <- sort(unique(as.character(xm$scenario)))
+    selected_scenario <- if (!is.null(input$data_scenario) && input$data_scenario %in% scenarios) input$data_scenario else scenarios[1]
+    xms <- xm[as.character(xm$scenario) == selected_scenario, , drop=FALSE]
+
+    config_key <- paste(xms$totaln, xms$cohortsize, xms$n.earlystop, xms$parameter_set, sep="|")
+    config_label <- paste0(
+      "Max cohorts=", as.integer(round(xms$totaln / xms$cohortsize)),
+      " | Max N=", xms$totaln,
+      " | Cohort size=", xms$cohortsize,
+      " | Early stop=", xms$n.earlystop,
+      " | Set=", xms$parameter_set
+    )
+    keep <- !duplicated(config_key)
+    choices <- stats::setNames(config_key[keep], config_label[keep])
+    selected_config <- if (!is.null(input$data_config) && input$data_config %in% config_key) input$data_config else config_key[keep][1]
+
+    fluidRow(
+      column(4, selectInput("data_method", "Method", choices=stats::setNames(methods, method_display(methods)), selected=selected_method)),
+      column(4, selectInput("data_scenario", "Scenario", choices=stats::setNames(scenarios, paste("Scenario", scenarios)), selected=selected_scenario)),
+      column(4, selectInput("data_config", "Design configuration", choices=choices, selected=selected_config))
+    )
+  })
+
+  detailed_filter_keys <- reactive({
+    req(rv$result, input$data_method, input$data_scenario, input$data_config)
+    parts <- strsplit(input$data_config, "\\|")[[1]]
+    req(length(parts) == 4)
+    list(
+      method=input$data_method,
+      scenario=input$data_scenario,
+      totaln=as.numeric(parts[1]),
+      cohortsize=as.numeric(parts[2]),
+      earlystop=as.numeric(parts[3]),
+      parameter_set=as.integer(parts[4])
     )
   })
 
   output$sum2_table <- DT::renderDT({
     req(rv$result)
-    DT::datatable(as_display_df(rv$result$out.sum2), options = list(scrollX = TRUE, pageLength = 10))
+    d <- as_display_df(rv$result$out.sum2)
+    if (!is.null(input$data_config)) {
+      k <- detailed_filter_keys()
+      keep <- as.character(d$method)==k$method &
+        as.character(d$scenario)==k$scenario &
+        as.numeric(d$totaln)==k$totaln &
+        as.numeric(d$cohortsize)==k$cohortsize &
+        as.numeric(d$n.earlystop)==k$earlystop &
+        as.integer(d$parameter_set)==k$parameter_set
+      d <- d[keep, , drop=FALSE]
+    }
+    if ("method" %in% names(d)) d$method <- method_display(d$method)
+    DT::datatable(d, rownames=FALSE, options = list(scrollX = TRUE, pageLength = 10))
   })
 
   output$sum1_table <- DT::renderDT({
     req(rv$result)
-    DT::datatable(as_display_df(rv$result$out.sum1), options = list(scrollX = TRUE, pageLength = 10))
+    d <- as_display_df(rv$result$out.sum1)
+    if (!is.null(input$data_config)) {
+      k <- detailed_filter_keys()
+      keep <- as.character(d$method)==k$method &
+        as.character(d$scenario)==k$scenario &
+        as.numeric(d$totaln)==k$totaln &
+        as.numeric(d$cohortsize)==k$cohortsize &
+        as.numeric(d$n.earlystop)==k$earlystop &
+        as.integer(d$parameter_set)==k$parameter_set
+      d <- d[keep, , drop=FALSE]
+    }
+    ord_cols <- intersect(c("doseA"), names(d))
+    if (length(ord_cols) > 0 && nrow(d) > 0) d <- d[order(as.numeric(d$doseA)), , drop=FALSE]
+    if ("method" %in% names(d)) d$method <- method_display(d$method)
+    DT::datatable(d, rownames=FALSE, options = list(scrollX = TRUE, pageLength = 10))
+  })
+
+
+  output$result_cards <- renderUI({
+    req(rv$result, input$overview_config)
+    x <- overview_matrix_data()
+    fluidRow(
+      column(4, div(class="metric-card", div(class="metric-value", sprintf("%.1f%%", mean(x$correct.pODC, na.rm=TRUE))), div(class="muted", "Selected configuration · average correct selection"))),
+      column(4, div(class="metric-card", div(class="metric-value", sprintf("%.1f", mean(x$mean.npat, na.rm=TRUE))), div(class="muted", "Selected configuration · average sample size"))),
+      column(4, div(class="metric-card", div(class="metric-value", sprintf("%.1f%%", mean(x$target.PPTS, na.rm=TRUE))), div(class="muted", "Selected configuration · average target allocation")))
+    )
+  })
+
+  output$overview_matrix_filter <- renderUI({
+    req(rv$result)
+    x <- as.data.frame(rv$result$out.sum2)
+    config_key <- paste(x$totaln, x$cohortsize, x$n.earlystop, x$parameter_set, sep = "|")
+    config_label <- paste0(
+      "Max cohorts=", as.integer(round(x$totaln / x$cohortsize)),
+      " | Max N=", x$totaln,
+      " | Cohort size=", x$cohortsize,
+      " | Early stop=", x$n.earlystop,
+      " | Set=", x$parameter_set,
+      " (delta=", x$delta, ", lambda1=", x$lambda1,
+      ", lambda2=", x$lambda2, ", eta1=", x$eta1, ")"
+    )
+    keep <- !duplicated(config_key)
+    choices <- stats::setNames(config_key[keep], config_label[keep])
+    selected <- if (!is.null(input$overview_config) && input$overview_config %in% config_key) input$overview_config else config_key[keep][1]
+    selectInput("overview_config", "Design configuration", choices = choices, selected = selected, width = "100%")
+  })
+
+  result_integrity_data <- reactive({
+    req(rv$result)
+    s1 <- as.data.frame(rv$result$out.sum1)
+    s2 <- as.data.frame(rv$result$out.sum2)
+    req(nrow(s1) > 0, nrow(s2) > 0)
+
+    key_cols <- c("method", "totaln", "cohortsize", "n.earlystop", "parameter_set", "scenario")
+    rows <- vector("list", nrow(s2))
+
+    for (i in seq_len(nrow(s2))) {
+      r <- s2[i, , drop = FALSE]
+      keep <- rep(TRUE, nrow(s1))
+      for (nm in key_cols) {
+        if (nm %in% names(s1) && nm %in% names(r)) {
+          keep <- keep & (as.character(s1[[nm]]) == as.character(r[[nm]][1]))
+        }
+      }
+      d <- s1[keep, , drop = FALSE]
+
+      status <- "PASS"
+      note <- "Dose matrices reproduce run-level summary."
+      rec_correct <- rec_target <- rec_mean_n <- NA_real_
+
+      if (nrow(d) == 0) {
+        status <- "FAIL"
+        note <- "No matching dose-level rows in out.sum1."
+      } else {
+        d <- d[order(as.numeric(d$doseA)), , drop = FALSE]
+        p_cols <- grep("^pODC[0-9]+$", names(d), value = TRUE)
+        a_cols <- grep("^m\\.PPTS[0-9]+$", names(d), value = TRUE)
+        n_cols <- grep("^m\\.NPTS[0-9]+$", names(d), value = TRUE)
+        ord_suffix <- function(cols, prefix) cols[order(as.numeric(sub(prefix, "", cols)))]
+        p_cols <- ord_suffix(p_cols, "^pODC")
+        a_cols <- ord_suffix(a_cols, "^m\\.PPTS")
+        n_cols <- ord_suffix(n_cols, "^m\\.NPTS")
+
+        sc <- tryCatch(BOINETC::get_boinetc_scenario(as.integer(r$scenario[1])), error = function(e) NULL)
+        if (is.null(sc) || length(p_cols) == 0 || length(a_cols) == 0 || length(n_cols) == 0) {
+          status <- "FAIL"
+          note <- "Could not reconstruct one or more dose matrices."
+        } else {
+          pmat <- as.matrix(d[, p_cols, drop = FALSE]); storage.mode(pmat) <- "numeric"
+          amat <- as.matrix(d[, a_cols, drop = FALSE]); storage.mode(amat) <- "numeric"
+          nmat <- as.matrix(d[, n_cols, drop = FALSE]); storage.mode(nmat) <- "numeric"
+          td <- as.integer(sc$tdose)
+          rec_correct <- sum(c(pmat)[td], na.rm = TRUE)
+          rec_target <- sum(c(amat)[td], na.rm = TRUE)
+          rec_mean_n <- sum(nmat, na.rm = TRUE)
+
+          dc <- abs(rec_correct - as.numeric(r$correct.pODC[1]))
+          da <- abs(rec_target - as.numeric(r$target.PPTS[1]))
+          dn <- abs(rec_mean_n - as.numeric(r$mean.npat[1]))
+          # pODC / m.PPTS are rounded before both outputs are formed and should
+          # agree to displayed precision. m.NPTS cells are rounded to 0.01 while
+          # mean.npat is rounded to 0.1, so use a small rounding tolerance.
+          if (dc > 0.11 || da > 0.11 || dn > 0.20) {
+            status <- "FAIL"
+            note <- paste0("Mismatch: Δ correct=", round(dc, 3),
+                           ", Δ target alloc=", round(da, 3),
+                           ", Δ mean N=", round(dn, 3), ".")
+          }
+        }
+      }
+
+      rows[[i]] <- data.frame(
+        Status = status,
+        Method = method_display(as.character(r$method[1])),
+        Scenario = as.integer(r$scenario[1]),
+        `Max cohorts` = as.integer(round(as.numeric(r$totaln[1]) / as.numeric(r$cohortsize[1]))),
+        `Parameter set` = as.integer(r$parameter_set[1]),
+        `Correct summary` = as.numeric(r$correct.pODC[1]),
+        `Correct from matrix` = rec_correct,
+        `Target allocation summary` = as.numeric(r$target.PPTS[1]),
+        `Target allocation from matrix` = rec_target,
+        `Mean N summary` = as.numeric(r$mean.npat[1]),
+        `Mean N from dose matrix` = rec_mean_n,
+        Note = note,
+        check.names = FALSE
+      )
+    }
+    do.call(rbind, rows)
+  })
+
+  output$integrity_summary <- renderUI({
+    req(rv$result)
+    x <- result_integrity_data()
+    n_fail <- sum(x$Status != "PASS", na.rm = TRUE)
+    if (n_fail == 0) {
+      div(class="alert alert-success",
+          strong("PASS: "), nrow(x), " run summaries agree with their dose-level matrices within rounding tolerance.")
+    } else {
+      div(class="alert alert-danger",
+          strong("CHECK REQUIRED: "), n_fail, " of ", nrow(x),
+          " run summaries do not reproduce from the dose-level matrices. These rows are shown first below.")
+    }
+  })
+
+  output$integrity_table <- DT::renderDT({
+    req(rv$result)
+    x <- result_integrity_data()
+    x <- x[order(x$Status, x$Scenario, x$Method), , drop = FALSE]
+    DT::datatable(x, rownames = FALSE,
+                  options = list(scrollX = TRUE, pageLength = 8, order = list(list(0, "asc"))))
+  })
+
+  overview_matrix_data <- reactive({
+    req(rv$result, input$overview_config)
+    parts <- strsplit(input$overview_config, "\\|", fixed = FALSE)[[1]]
+    req(length(parts) == 4)
+    totaln <- as.numeric(parts[1])
+    cohortsize <- as.numeric(parts[2])
+    earlystop <- as.numeric(parts[3])
+    parameter_set <- as.integer(parts[4])
+
+    x <- as.data.frame(rv$result$out.sum2)
+    x <- x[as.numeric(x$totaln) == totaln &
+             as.numeric(x$cohortsize) == cohortsize &
+             as.numeric(x$n.earlystop) == earlystop &
+             as.integer(x$parameter_set) == parameter_set, , drop = FALSE]
+    req(nrow(x) > 0)
+    x$method_label <- method_display(x$method)
+    x
+  })
+
+  draw_summary_heatmap <- function(df, metric, title_text, digits = 1, scale_max = NULL) {
+    req(nrow(df) > 0)
+    # Keep a stable, meaningful order instead of depending on row order.
+    method_order <- c("BOINETC_m1", "BOINETC_m2", "BOINETC_m3")
+    method_names <- method_display(method_order)
+    present_methods <- unique(as.character(df$method))
+    methods_raw <- c(method_order[method_order %in% present_methods], setdiff(present_methods, method_order))
+    methods <- method_display(methods_raw)
+    scenarios <- sort(unique(as.numeric(df$scenario)))
+    mat <- matrix(NA_real_, nrow = length(scenarios), ncol = length(methods),
+                  dimnames = list(paste0("Scenario ", scenarios), methods))
+    for (i in seq_len(nrow(df))) {
+      r <- match(paste0("Scenario ", df$scenario[i]), rownames(mat))
+      c <- match(method_display(df$method[i]), colnames(mat))
+      if (!is.na(r) && !is.na(c)) mat[r, c] <- as.numeric(df[[metric]][i])
+    }
+
+    nr <- nrow(mat); nc <- ncol(mat)
+    z <- t(mat[nr:1, , drop = FALSE])
+    if (!is.null(scale_max) && is.finite(scale_max) && scale_max > 0) {
+      rng <- c(0, scale_max)
+    } else {
+      rng <- range(mat, na.rm = TRUE)
+      if (!all(is.finite(rng)) || diff(rng) == 0) rng <- c(0, 1)
+    }
+
+    op <- graphics::par(mar = c(5.5, 7.2, 3.5, 1))
+    on.exit(graphics::par(op), add = TRUE)
+    graphics::image(
+      x = seq_len(nc), y = seq_len(nr), z = z,
+      col = grDevices::hcl.colors(20, "YlOrRd", rev = FALSE),
+      zlim = rng, axes = FALSE, xlab = "Method", ylab = "Scenario", main = title_text
+    )
+    graphics::axis(1, at = seq_len(nc), labels = colnames(mat), las = 2, cex.axis = 0.9)
+    graphics::axis(2, at = seq_len(nr), labels = rev(rownames(mat)), las = 1, cex.axis = 0.9)
+    graphics::box()
+    for (i in seq_len(nr)) {
+      for (j in seq_len(nc)) {
+        val <- mat[i, j]
+        lab <- if (is.na(val)) "—" else format(round(val, digits), nsmall = digits, trim = TRUE)
+        graphics::text(j, nr - i + 1, labels = lab, cex = 0.95)
+      }
+    }
+    # Show the numeric color scale explicitly so heatmap intensity is not ambiguous.
+    graphics::mtext(paste0("Color scale: 0–", format(if (is.null(scale_max)) rng[2] else scale_max, trim = TRUE)),
+                    side = 3, line = 0.25, adj = 1, cex = 0.72, col = "#667085")
+  }
+
+  draw_grouped_metric <- function(df, metric, ylab, y_max = NULL) {
+    req(nrow(df) > 0)
+    method_order <- c("BOINETC_m1", "BOINETC_m2", "BOINETC_m3")
+    present_methods <- unique(as.character(df$method))
+    methods_raw <- c(method_order[method_order %in% present_methods], setdiff(present_methods, method_order))
+    scenarios <- sort(unique(as.numeric(df$scenario)))
+    mat <- matrix(NA_real_, nrow = length(methods_raw), ncol = length(scenarios),
+                  dimnames = list(method_display(methods_raw), paste0("S", scenarios)))
+    for (i in seq_len(nrow(df))) {
+      rr <- match(as.character(df$method[i]), methods_raw)
+      cc <- match(as.numeric(df$scenario[i]), scenarios)
+      if (!is.na(rr) && !is.na(cc)) mat[rr, cc] <- as.numeric(df[[metric]][i])
+    }
+    ymax <- if (!is.null(y_max) && is.finite(y_max)) y_max else max(mat, na.rm = TRUE) * 1.12
+    if (!is.finite(ymax) || ymax <= 0) ymax <- 1
+    op <- graphics::par(mar=c(5.2,4.8,2.2,1))
+    on.exit(graphics::par(op), add=TRUE)
+    bp <- graphics::barplot(mat, beside=TRUE, names.arg=colnames(mat), ylab=ylab,
+                            ylim=c(0, ymax), border=NA, legend.text=rownames(mat),
+                            args.legend=list(x="top", inset=c(0,-0.01), horiz=TRUE, bty="n", cex=.85))
+    # Value labels are kept compact and directly above each bar.
+    for (r in seq_len(nrow(mat))) {
+      graphics::text(bp[r, ], mat[r, ], labels=ifelse(is.na(mat[r, ]), "", round(mat[r, ],1)), pos=3, cex=.72)
+    }
+  }
+
+  output$correct_selection_matrix_plot <- renderPlot({
+    d <- overview_matrix_data()
+    # CALC.SUM() can count multiple tied ODCs in one trial, so the sum across
+    # target doses is not mathematically guaranteed to be <= 100. Never clip
+    # a real result just to preserve a percentage-looking scale.
+    max_correct <- max(100, ceiling(max(as.numeric(d$correct.pODC), na.rm = TRUE) / 10) * 10)
+    draw_summary_heatmap(d, "correct.pODC", "Correct Target-Dose Selection (%)", digits = 1, scale_max = max_correct)
+  })
+
+  output$sample_size_matrix_plot <- renderPlot({
+    d <- overview_matrix_data()
+    max_n <- max(as.numeric(d$totaln), na.rm = TRUE)
+    draw_summary_heatmap(d, "mean.npat", "Mean Sample Size", digits = 1, scale_max = max_n)
+  })
+
+  output$target_alloc_matrix_plot <- renderPlot({
+    draw_summary_heatmap(overview_matrix_data(), "target.PPTS", "Target Patient Allocation (%)", digits = 1, scale_max = 100)
+  })
+
+  output$correct_selection_plot <- renderPlot({
+    d <- overview_matrix_data()
+    max_correct <- max(100, ceiling(max(as.numeric(d$correct.pODC), na.rm = TRUE) / 10) * 10)
+    draw_grouped_metric(d, "correct.pODC", "Correct target-dose selection (%)", y_max = max_correct)
+  })
+
+  output$sample_size_plot <- renderPlot({
+    d <- overview_matrix_data()
+    draw_grouped_metric(d, "mean.npat", "Mean sample size", y_max = max(as.numeric(d$totaln), na.rm = TRUE))
+  })
+
+  output$chart_config_filter <- renderUI({
+    req(rv$result)
+    x <- as.data.frame(rv$result$out.sum2)
+    config_key <- paste(x$totaln, x$cohortsize, x$n.earlystop, x$parameter_set, sep = "|")
+    config_label <- paste0(
+      "Max cohorts=", as.integer(round(x$totaln / x$cohortsize)),
+      " | Early stop=", x$n.earlystop,
+      " | Set=", x$parameter_set,
+      " (delta=", x$delta, ", lambda1=", x$lambda1, ", lambda2=", x$lambda2, ", eta1=", x$eta1, ")"
+    )
+    keep <- !duplicated(config_key)
+    choices <- stats::setNames(config_key[keep], config_label[keep])
+    selected <- if (!is.null(input$chart_config) && input$chart_config %in% config_key) input$chart_config else config_key[keep][1]
+    selectInput("chart_config", "Design configuration", choices=choices, selected=selected, width="100%")
+  })
+
+  chart_summary_data <- reactive({
+    req(rv$result, input$chart_config)
+    parts <- strsplit(input$chart_config, "\\|", fixed = FALSE)[[1]]
+    req(length(parts) == 4)
+    x <- as.data.frame(rv$result$out.sum2)
+    keep <- as.numeric(x$totaln) == as.numeric(parts[1]) &
+      as.numeric(x$cohortsize) == as.numeric(parts[2]) &
+      as.numeric(x$n.earlystop) == as.numeric(parts[3]) &
+      as.integer(x$parameter_set) == as.integer(parts[4])
+    x[keep, , drop=FALSE]
+  })
+
+  output$metric_plot <- renderPlot({
+    req(rv$result)
+    metric <- input$chart_metric
+    label <- switch(metric, "correct.pODC"="Correct selection (%)", "mean.npat"="Mean sample size", "target.PPTS"="Target patient allocation (%)", metric)
+    d <- chart_summary_data()
+    ymax <- if (metric == "correct.pODC") {
+      max(100, ceiling(max(as.numeric(d$correct.pODC), na.rm=TRUE) / 10) * 10)
+    } else if (metric == "target.PPTS") {
+      100
+    } else if (metric == "mean.npat") {
+      max(as.numeric(d$totaln), na.rm=TRUE)
+    } else NULL
+    draw_grouped_metric(d, metric, label, y_max = ymax)
+  })
+
+  output$dose_chart_filters <- renderUI({
+    req(rv$result)
+    x <- as.data.frame(rv$result$out.sum2)
+    methods <- unique(as.character(x$method))
+    selected_method <- if (!is.null(input$dose_method) && input$dose_method %in% methods) input$dose_method else methods[1]
+
+    x_m <- x[x$method == selected_method, , drop = FALSE]
+    scenarios <- unique(as.character(x_m$scenario))
+    selected_scenario <- if (!is.null(input$dose_scenario) && input$dose_scenario %in% scenarios) input$dose_scenario else scenarios[1]
+
+    x_ms <- x_m[as.character(x_m$scenario) == selected_scenario, , drop = FALSE]
+    config_key <- paste(x_ms$totaln, x_ms$cohortsize, x_ms$n.earlystop, x_ms$parameter_set, sep = "|")
+    config_label <- paste0(
+      "Max cohorts=", as.integer(round(x_ms$totaln / x_ms$cohortsize)),
+      " | Max N=", x_ms$totaln,
+      " | Cohort size=", x_ms$cohortsize,
+      " | Early stop=", x_ms$n.earlystop,
+      " | Set=", x_ms$parameter_set,
+      " (delta=", x_ms$delta, ", lambda1=", x_ms$lambda1,
+      ", lambda2=", x_ms$lambda2, ", eta1=", x_ms$eta1, ")"
+    )
+    keep_cfg <- !duplicated(config_key)
+    config_key <- config_key[keep_cfg]
+    config_label <- config_label[keep_cfg]
+    choices <- stats::setNames(config_key, config_label)
+    selected_config <- if (!is.null(input$dose_config) && input$dose_config %in% config_key) input$dose_config else config_key[1]
+
+    fluidRow(
+      column(4, selectInput("dose_method", "Method", choices = methods, selected = selected_method)),
+      column(4, selectInput("dose_scenario", "Scenario", choices = scenarios, selected = selected_scenario)),
+      column(4, selectInput("dose_config", "Design configuration", choices = choices, selected = selected_config))
+    )
+  })
+
+  dose_plot_data <- reactive({
+    req(rv$result, input$dose_method, input$dose_scenario, input$dose_config)
+    parts <- strsplit(input$dose_config, "\\|", fixed = FALSE)[[1]]
+    req(length(parts) == 4)
+    totaln <- as.numeric(parts[1])
+    cohortsize <- as.numeric(parts[2])
+    earlystop <- as.numeric(parts[3])
+    parameter_set <- as.integer(parts[4])
+
+    d <- as.data.frame(rv$result$out.sum1)
+    keep <- as.character(d$method) == input$dose_method &
+      as.character(d$scenario) == input$dose_scenario &
+      as.numeric(d$totaln) == totaln &
+      as.numeric(d$cohortsize) == cohortsize &
+      as.numeric(d$n.earlystop) == earlystop &
+      as.integer(d$parameter_set) == parameter_set
+    d <- d[keep, , drop = FALSE]
+    req(nrow(d) > 0)
+    d[order(as.numeric(d$doseA)), , drop = FALSE]
+  })
+
+  draw_dose_metric <- function(d, prefix, main_label) {
+    req(nrow(d) > 0)
+    cols <- grep(paste0("^", prefix, "[0-9]+$"), names(d), value = TRUE)
+    req(length(cols) > 0)
+    b_levels <- as.numeric(sub(paste0("^", prefix), "", cols))
+    ord_b <- order(b_levels)
+    cols <- cols[ord_b]
+    b_levels <- b_levels[ord_b]
+
+    a_levels <- as.numeric(d$doseA)
+    ord_a <- order(a_levels)
+    d <- d[ord_a, , drop = FALSE]
+    a_levels <- a_levels[ord_a]
+
+    mat <- as.matrix(d[, cols, drop = FALSE])
+    storage.mode(mat) <- "numeric"
+
+    op <- graphics::par(mar = c(5, 5, 3.4, 1))
+    on.exit(graphics::par(op), add = TRUE)
+    nr <- nrow(mat)
+    graphics::image(
+      x = seq_along(b_levels), y = seq_along(a_levels), z = t(mat[nr:1, , drop=FALSE]),
+      col = grDevices::hcl.colors(20, "YlOrRd", rev = FALSE), zlim = c(0, 100),
+      axes = FALSE, xlab = "Dose level B", ylab = "Dose level A",
+      main = paste0(main_label, " — ", method_display(d$method[1]), " | Scenario ", d$scenario[1],
+                    " | Max cohorts = ", as.integer(round(d$totaln[1] / d$cohortsize[1])),
+                    " | Max N = ", d$totaln[1], " | Set = ", d$parameter_set[1])
+    )
+    graphics::axis(1, at = seq_along(b_levels), labels = b_levels)
+    graphics::axis(2, at = seq_along(a_levels), labels = rev(a_levels), las = 1)
+    for (i in seq_len(nrow(mat))) {
+      for (j in seq_len(ncol(mat))) {
+        graphics::text(j, nr - i + 1, labels = round(mat[i, j], 1), cex = .8)
+      }
+    }
+    # Outline the true target dose combinations for this scenario.
+    sc_obj <- tryCatch(BOINETC::get_boinetc_scenario(as.integer(d$scenario[1])), error = function(e) NULL)
+    if (!is.null(sc_obj) && length(sc_obj$tdose) > 0) {
+      nd1 <- length(a_levels)
+      target_idx <- as.integer(sc_obj$tdose)
+      target_a <- ((target_idx - 1) %% nd1) + 1
+      target_b <- ((target_idx - 1) %/% nd1) + 1
+      for (k in seq_along(target_idx)) {
+        ai <- match(target_a[k], a_levels)
+        bj <- match(target_b[k], b_levels)
+        if (!is.na(ai) && !is.na(bj)) {
+          yy <- nr - ai + 1
+          graphics::rect(bj - .48, yy - .48, bj + .48, yy + .48, border = "black", lwd = 2.2)
+        }
+      }
+    }
+    graphics::mtext("Black outline = true target dose combination; color scale = 0–100%",
+                    side = 3, line = 0.15, adj = 1, cex = .7, col = "#667085")
+    graphics::box()
+  }
+
+  output$dose_odc_plot <- renderPlot({
+    draw_dose_metric(dose_plot_data(), "pODC", "ODC Selection Probability (%)")
+  })
+
+  output$dose_alloc_plot <- renderPlot({
+    draw_dose_metric(dose_plot_data(), "m.PPTS", "Patient Allocation by Dose Combination (%)")
   })
 
   generated_files <- reactive({
@@ -376,7 +1087,7 @@ server <- function(input, output, session) {
     if (is.null(rv$result)) {
       div(class = "alert alert-info", "Run a simulation to generate downloadable files.")
     } else {
-      div(class = "alert alert-success", "Generated files are stored in a temporary app directory for this R session.")
+      div(class = "alert alert-success", "Generated files are stored in the BOINETC_Output folder inside this app directory and can also be downloaded below.")
     }
   })
 

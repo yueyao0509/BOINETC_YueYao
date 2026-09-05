@@ -1,0 +1,25 @@
+Package: BOINETC
+Type: Package
+Title: BOIN-ETC Simulation Utilities
+Version: 0.1.1
+Authors@R: c(
+    person(given = "BOIN-ETC", family = "Authors", role = c("aut", "cre"), email = "maintainer@example.com")
+    )
+Description: Tools for simulating and summarizing BOIN-ETC dose-combination designs. The package was assembled from the provided BOIN-ETC R scripts and preserves the original exported function names while adding package-friendly helpers for scenario access, simulation runs, and summary workflow execution.
+License: GPL-3
+Encoding: UTF-8
+LazyData: true
+Depends: R (>= 3.5.0)
+Imports:
+    stats,
+    utils
+Suggests:
+    DT,
+    Iso,
+    UniIsoRegression,
+    mfp,
+    openxlsx,
+    shiny,
+    testthat (>= 3.0.0)
+Config/testthat/edition: 3
+RoxygenNote: 7.3.2

@@ -1,0 +1,97 @@
+#################################################################
+# Simulation results of BOIN-ETC 
+#################################################################
+
+
+#####################################
+# Settings 
+#####################################
+simulation times               = 100
+number of max cohort           = 16
+cohortsize                     = 3
+(target tox, target eff)       = (0.4,0.75)
+#pats to move to next subtrial = 6
+(lambda1, lambda2, eta1)       = (0.14, 0.35, 0.48)
+
+scenario = 4
+true probability (tox) 
+     [,1] [,2] [,3] [,4]
+[1,] 0.02 0.06 0.12 0.18
+[2,] 0.04 0.11 0.15 0.35
+[3,] 0.05 0.13 0.35 0.50
+[4,] 0.10 0.35 0.48 0.54
+true probability (eff) 
+     [,1] [,2] [,3] [,4]
+[1,]  0.1 0.20 0.20 0.40
+[2,]  0.2 0.30 0.61 0.65
+[3,]  0.3 0.60 0.65 0.70
+[4,]  0.4 0.65 0.70 0.75
+
+parameter for utility calculation 
+[1] 100  25  75   0
+
+
+#####################################
+# Results 
+#####################################
+# mean number of patients by dose level 
+     [,1] [,2] [,3] [,4]
+[1,] 3.06 1.02 3.48 4.71
+[2,] 3.33 3.27 4.53 1.68
+[3,] 3.63 4.50 1.41 0.18
+[4,] 4.05 3.09 0.45 0.15
+
+# percentage of number of patients treated by dose level 
+     [,1] [,2] [,3] [,4]
+[1,]  7.4  2.6  8.4 11.5
+[2,]  8.1  7.9 10.7  3.7
+[3,]  8.9 10.1  3.0  0.4
+[4,]  9.1  6.8  1.0  0.3
+
+# mean number of tox by dose level 
+     [,1] [,2] [,3] [,4]
+[1,] 0.04 0.05 0.44 0.80
+[2,] 0.11 0.28 0.71 0.66
+[3,] 0.19 0.58 0.58 0.08
+[4,] 0.48 1.05 0.20 0.09
+
+# mean number of eff by dose level 
+     [,1] [,2] [,3] [,4]
+[1,] 0.27 0.26 0.70 1.75
+[2,] 0.61 1.03 2.58 1.11
+[3,] 1.09 2.63 0.93 0.14
+[4,] 1.70 2.01 0.31 0.13
+
+# observed P(tox) by dose level 
+     [,1] [,2] [,3] [,4]
+[1,]  1.3  4.9 12.6 17.0
+[2,]  3.3  8.6 15.7 39.3
+[3,]  5.2 12.9 41.1 44.4
+[4,] 11.9 34.0 44.4 60.0
+
+# observed P(eff) by dose level 
+     [,1] [,2] [,3] [,4]
+[1,]  8.8 25.5 20.1 37.2
+[2,] 18.3 31.5 57.0 66.1
+[3,] 30.0 58.4 66.0 77.8
+[4,] 42.0 65.0 68.9 86.7
+
+# percentage to select as ODC by dose level 
+     [,1] [,2] [,3] [,4]
+[1,]    0    1    0    6
+[2,]    2    5   25   10
+[3,]    7   24   10    0
+[4,]   13   18    1    1
+
+# percentage to not select ODC 
+[1] 0
+
+# percentage to select target dose correctly 
+[1] 49
+
+# percentage of number of patients assigned to target doses 
+[1] 20.8
+
+# mean number of patients 
+   Min. 1st Qu.  Median    Mean 3rd Qu.    Max. 
+  21.00   39.00   45.00   42.54   48.00   48.00 

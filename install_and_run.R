@@ -10,10 +10,10 @@ if (length(missing) > 0) {
   install.packages(missing)
 }
 
-tarball <- file.path(app_dir, "BOINETC_0.1.0.tar.gz")
-if (!requireNamespace("BOINETC", quietly = TRUE)) {
+tarball <- file.path(app_dir, "BOINETC_0.1.1.tar.gz")
+if (!requireNamespace("BOINETC", quietly = TRUE) || utils::packageVersion("BOINETC") < numeric_version("0.1.1")) {
   if (!file.exists(tarball)) {
-    stop("BOINETC_0.1.0.tar.gz was not found in this folder.", call. = FALSE)
+    stop("BOINETC_0.1.1.tar.gz was not found in this folder.", call. = FALSE)
   }
   install.packages(tarball, repos = NULL, type = "source")
 }

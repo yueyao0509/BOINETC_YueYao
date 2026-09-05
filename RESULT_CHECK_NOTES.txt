@@ -1,0 +1,15 @@
+BOIN-ETC V5.8 Result-Checked
+
+Key fixes after simulated result-path audit:
+1. Fixed multi-parameter-set file overwrite bug. Each delta/lambda/eta parameter set now gets a unique _psN simulation filename.
+2. Summary data now records lambda1, lambda2, eta1, and parameter_set so results cannot be mislabeled.
+3. Results Overview and general Charts now display one design configuration at a time instead of merging Max cohorts 16/24 into duplicate-looking labels.
+4. Dose-level heatmaps remain one run configuration at a time; 4x4 scenarios render Dose A 1-4 x Dose B 1-4.
+5. Added stricter whole-number validation for cohorts, trials, cohort size, and seed; alpha/beta must be > 0.
+6. lambda1/lambda2/eta1 vectors must contain either one value or one value per delta setting.
+7. Bundled BOINETC package bumped to 0.1.1 and launchers upgrade older installed versions automatically.
+
+Environment note: R is not installed in the audit container, so full stochastic BOIN-ETC execution could not be performed here. Structural/result-routing tests were performed and the Windows launcher remains the final runtime validation path.
+8. Result cards now follow the currently selected configuration instead of averaging across all configurations.
+9. Dose-level result heatmaps now use the same A-dose orientation as Scenario Preview (A=1 at top).
+10. Detailed Data displays dose A in ascending order for easier reading; exported/raw summaries remain compatible.

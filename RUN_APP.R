@@ -1,0 +1,6 @@
+this_file <- tryCatch(normalizePath(sys.frame(1)$ofile, winslash="/", mustWork=TRUE), error=function(e) NA_character_)
+app_dir <- if (!is.na(this_file)) dirname(this_file) else normalizePath(getwd(), winslash="/", mustWork=TRUE)
+setwd(app_dir)
+message("Starting BOIN-ETC app from: ", app_dir)
+if (!requireNamespace("shiny", quietly=TRUE)) stop("Package 'shiny' is required. Run install_and_run.R first.")
+shiny::runApp(app_dir, launch.browser=TRUE)

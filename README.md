@@ -32,3 +32,13 @@ source("install_and_run.R")
 ## Recommended first run
 
 Use the default settings with `ntrial = 100` for a quick smoke test. Increase `ntrial` to 1,000 or more for final operating-characteristic simulations.
+
+
+## Reviewed V5.5 improvements
+
+- More application-like workspace header and consistent page shell.
+- Explicit navigation IDs and automatic jump to Results after a successful simulation.
+- Live input validation before a run starts.
+- Clearer persistent-output messaging.
+- More robust manual launcher path handling.
+- Existing BOINETC simulation logic and six-page workflow are preserved.

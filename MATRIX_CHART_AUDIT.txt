@@ -1,0 +1,25 @@
+BOINETC Shiny V5.9 — Matrix / Chart Audit
+
+Scope of this revision
+- Only result matrices and charts were audited and changed.
+- BOIN-ETC simulation logic was not changed in this revision.
+
+Audit conclusions
+1. Summary metrics (correct selection, mean sample size, target patient allocation) are scalar values per method/scenario, so the correct overview shape is Scenario x Method, not a 4 x 4 dose matrix.
+2. Dose-level ODC selection and patient allocation are dose-combination quantities and are correctly displayed as 4 x 4 matrices for Scenarios 3-6.
+3. Dose axes are displayed as numeric levels 1-4. Dose A = 1 is at the top; Dose B increases left-to-right.
+4. Previous heatmaps rescaled colors independently to each plot's observed minimum/maximum. This could visually exaggerate differences and make plots incomparable.
+
+Changes
+- Correct Selection and Target Patient Allocation heatmaps now use a fixed 0-100% color scale.
+- Mean Sample Size heatmap now uses 0-Max N for the selected configuration.
+- Dose-level ODC and patient-allocation heatmaps now use a fixed 0-100% color scale.
+- Dose-level heatmaps outline the scenario's true target dose combinations in black.
+- Summary bar charts are grouped by Scenario, with methods shown side-by-side, rather than 12 repeated method/scenario labels.
+- Percent charts use a fixed 0-100 y-axis; sample-size charts use 0-Max N.
+- Method and scenario ordering is stable and explicit.
+- Dose heatmap titles show both Max cohorts and Max N.
+
+Important interpretation
+- Overview matrix: rows = scenarios, columns = methods.
+- Dose-level matrix: rows = Dose A (1 at top), columns = Dose B (1 at left).
